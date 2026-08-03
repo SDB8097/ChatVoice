@@ -28,7 +28,8 @@ class YouTubeChat:
 
         try:
 
-            self.chat = ChatDownloader().get_chat(url)
+            # Получение итератора может быть блокирующим, выполняем в отдельном потоке
+            self.chat = await asyncio.to_thread(lambda: ChatDownloader().get_chat(url))
 
             logging.info("YouTube чат подключен.")
 
@@ -36,7 +37,9 @@ class YouTubeChat:
 
                 try:
 
-                    message = next(self.chat)
+                    # next() над итератором chat_downloader может блокировать,
+                    # поэтому вызываем его в отдельном потоке через asyncio.to_thread
+                    message = await asyncio.to_thread(next, self.chat)
 
                 except StopIteration:
                     break
@@ -54,6 +57,8 @@ class YouTubeChat:
                     "timestamp": message.get("timestamp", 0)
                 }
 
+                # callback будет вызываться из асинхронного потока; GUI обновления
+                # должны быть безопасно запланированы в GUI-потоке (см. gui.log)
                 self.callback(data)
 
                 await asyncio.sleep(0)
