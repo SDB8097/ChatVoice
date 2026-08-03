@@ -2,6 +2,7 @@ import asyncio
 import os
 import tempfile
 import uuid
+import logging
 
 import edge_tts
 import pygame
@@ -16,12 +17,22 @@ class EdgeTTS:
         self.pitch = config["voice"]["pitch"]
         self.volume = config["voice"]["volume"]
 
-        if not pygame.mixer.get_init():
-            pygame.mixer.init()
+        self.audio_available = False
+
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init()
+
+            self.audio_available = True
+
+        except Exception as e:
+            # Running in headless environment or no audio device
+            logging.warning(f"pygame.mixer init failed: {e}")
+            self.audio_available = False
 
     async def speak(self, text: str):
 
-        if not text.strip():
+        if not text or not text.strip():
             return
 
         filename = os.path.join(
@@ -37,20 +48,38 @@ class EdgeTTS:
             volume=self.volume
         )
 
-        await communicate.save(filename)
-
-        pygame.mixer.music.load(filename)
-        pygame.mixer.music.play()
-
-        while pygame.mixer.music.get_busy():
-            await asyncio.sleep(0.05)
-
-        pygame.mixer.music.unload()
-
         try:
-            os.remove(filename)
-        except Exception:
-            pass
+            await communicate.save(filename)
+
+            if not self.audio_available:
+                logging.warning("Аудио недоступно, файл сохранён, но воспроизведение пропущено: %s", filename)
+                try:
+                    os.remove(filename)
+                except Exception:
+                    pass
+                return
+
+            try:
+                pygame.mixer.music.load(filename)
+                pygame.mixer.music.play()
+
+                while pygame.mixer.music.get_busy():
+                    await asyncio.sleep(0.05)
+
+                try:
+                    pygame.mixer.music.unload()
+                except Exception:
+                    pass
+
+            except Exception as e:
+                logging.exception(e)
+
+        finally:
+            try:
+                if os.path.exists(filename):
+                    os.remove(filename)
+            except Exception:
+                pass
 
     async def speak_user(self, username: str, message: str):
 
