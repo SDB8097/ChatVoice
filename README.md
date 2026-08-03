@@ -13,8 +13,6 @@
 - ✅ YouTube
 - ✅ Twitch
 - ✅ Kick
-- 🔜 TikTok
-- 🔜 Discord
 
 ---
 
@@ -202,10 +200,10 @@ en-US-JennyNeural
 
 # Автор
 
-SDB
+SDB8097
 
 GitHub:
-https://github.com/
+https://github.com/SDB8097
 
 ---
 
