@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import logging
+from typing import Callable, Optional
 
 
 class ChatVoiceApp:
@@ -22,6 +23,10 @@ class ChatVoiceApp:
 
         self.root.geometry("900x650")
         self.root.minsize(900, 650)
+
+        # callbacks set by main
+        self._on_start: Optional[Callable[[], None]] = None
+        self._on_stop: Optional[Callable[[], None]] = None
 
         self.create_widgets()
 
@@ -116,8 +121,8 @@ class ChatVoiceApp:
             expand=True
         )
 
-        self.log("ChatVoice запущен.")
-        self.log("Ожидание подключения...")
+        self.safe_log("ChatVoice запущен.")
+        self.safe_log("Ожидание подключения...")
 
         # -------------------------------
         # Кнопки
@@ -162,16 +167,34 @@ class ChatVoiceApp:
 
     # --------------------------------------------------
 
+    def safe_log(self, text: str):
+        """
+        Thread-safe log helper: schedule update on the Tk main thread.
+        """
+        try:
+            # If called from main thread, insert directly
+            if self.root and self.root.winfo_exists():
+                self.root.after(0, lambda: self._insert_log(text))
+        except Exception:
+            # Fallback to logging
+            logging.info(text)
+
+    def _insert_log(self, text: str):
+        try:
+            self.log_box.insert(
+                "end",
+                text + "\n"
+            )
+
+            self.log_box.see("end")
+
+            logging.info(text)
+        except Exception:
+            logging.info(text)
+
+    # Backwards-compatible method name used elsewhere
     def log(self, text: str):
-
-        self.log_box.insert(
-            "end",
-            text + "\n"
-        )
-
-        self.log_box.see("end")
-
-        logging.info(text)
+        self.safe_log(text)
 
     # --------------------------------------------------
 
@@ -179,13 +202,56 @@ class ChatVoiceApp:
 
         url = self.url_entry.get().strip()
 
-        self.log(f"Подключение к: {url}")
+        self.safe_log(f"Подключение к: {url}")
+
+        # disable start button to prevent double clicks
+        try:
+            self.start_button.configure(state="disabled")
+        except Exception:
+            pass
+
+        if self._on_start:
+            try:
+                self._on_start()
+            except Exception as e:
+                logging.exception(e)
 
     # --------------------------------------------------
 
     def stop_chat(self):
 
-        self.log("Чат остановлен.")
+        self.safe_log("Чат остановлен.")
+
+        try:
+            self.start_button.configure(state="normal")
+        except Exception:
+            pass
+
+        if self._on_stop:
+            try:
+                self._on_stop()
+            except Exception as e:
+                logging.exception(e)
+
+    # --------------------------------------------------
+
+    def set_callbacks(self, on_start: Callable[[], None], on_stop: Callable[[], None]):
+        """Register callbacks (used by main.ChatVoice)."""
+        self._on_start = on_start
+        self._on_stop = on_stop
+
+    # --------------------------------------------------
+
+    def get_youtube_url(self) -> str:
+        return self.url_entry.get().strip()
+
+    # --------------------------------------------------
+
+    def get_selected_voice(self) -> str:
+        try:
+            return str(self.voice_menu.get())
+        except Exception:
+            return self.config["voice"]["default_voice"]
 
     # --------------------------------------------------
 
